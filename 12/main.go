@@ -12,8 +12,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	// fmt.Println(solvePartOne(grid))
-	fmt.Println(solvePartTwo(grid))
+	fmt.Println(solvePartOne(copyGrid(grid)))
+	fmt.Println(solvePartTwo(copyGrid(grid)))
 }
 
 type Pos struct {
@@ -36,7 +36,7 @@ func solvePartOne(grid [][]byte) int {
 		}
 	}
 
-	ds := dijkstra(grid, start, newNeighborFn(uphill))
+	ds := dijkstra(grid, start, newNeighborsFn(uphill))
 	for i, row := range ds {
 		for j, d := range row {
 			p := Pos{i, j}
@@ -65,7 +65,7 @@ func solvePartTwo(grid [][]byte) int {
 	}
 
 	min := math.MaxInt32
-	ds := dijkstra(grid, end, newNeighborFn(downhill))
+	ds := dijkstra(grid, end, newNeighborsFn(downhill))
 	for i, row := range ds {
 		for j, d := range row {
 			if grid[i][j] == 'a' && d < min {
@@ -77,7 +77,7 @@ func solvePartTwo(grid [][]byte) int {
 	return min
 }
 
-func dijkstra(grid [][]byte, init Pos, neighborFn func([][]byte, Pos) []Pos) [][]int {
+func dijkstra(grid [][]byte, init Pos, neighborsFn func([][]byte, Pos) <-chan Pos) [][]int {
 	visited := make(map[Pos]bool)
 	unvisited := make(map[Pos]struct{})
 	distances := make([][]int, len(grid))
@@ -95,8 +95,8 @@ func dijkstra(grid [][]byte, init Pos, neighborFn func([][]byte, Pos) []Pos) [][
 	for {
 		newD := distances[currentNode.i][currentNode.j] + 1
 
-		neighbors := neighborFn(grid, currentNode)
-		for _, n := range neighbors {
+		neighbors := neighborsFn(grid, currentNode)
+		for n := range neighbors {
 			if visited[n] {
 				continue
 			}
@@ -125,55 +125,10 @@ func dijkstra(grid [][]byte, init Pos, neighborFn func([][]byte, Pos) []Pos) [][
 	}
 }
 
-func newNeighborFn(direction func(byte, byte) bool) func([][]byte, Pos) []Pos {
-	return func(grid [][]byte, curr Pos) []Pos {
-		return getNeighbors(grid, curr, direction)
+func newNeighborsFn(direction func(byte, byte) bool) func([][]byte, Pos) <-chan Pos {
+	return func(grid [][]byte, curr Pos) <-chan Pos {
+		return neighbors(grid, curr, direction)
 	}
-}
-
-func getNeighbors(grid [][]byte, curr Pos, canReach func(from, to byte) bool) []Pos {
-	var neighbors []Pos = make([]Pos, 0)
-
-	up := Pos{i: curr.i - 1, j: curr.j}
-	down := Pos{i: curr.i + 1, j: curr.j}
-	right := Pos{i: curr.i, j: curr.j + 1}
-	left := Pos{i: curr.i, j: curr.j - 1}
-
-	from := grid[curr.i][curr.j]
-
-	if curr.i < len(grid)-1 {
-		to := grid[down.i][down.j]
-
-		if canReach(from, to) {
-			neighbors = append(neighbors, down)
-		}
-	}
-
-	if curr.i > 0 {
-		to := grid[up.i][up.j]
-
-		if canReach(from, to) {
-			neighbors = append(neighbors, up)
-		}
-	}
-
-	if curr.j < len(grid[curr.i])-1 {
-		to := grid[right.i][right.j]
-
-		if canReach(from, to) {
-			neighbors = append(neighbors, right)
-		}
-	}
-
-	if curr.j > 0 {
-		to := grid[left.i][left.j]
-
-		if canReach(from, to) {
-			neighbors = append(neighbors, left)
-		}
-	}
-
-	return neighbors
 }
 
 func uphill(from, to byte) bool {
@@ -182,6 +137,48 @@ func uphill(from, to byte) bool {
 
 func downhill(from, to byte) bool {
 	return int(to)-int(from) >= -1
+}
+
+func neighbors(grid [][]byte, c Pos, canReach func(byte, byte) bool) <-chan Pos {
+	ch := make(chan Pos)
+
+	inBounds := func(p Pos) bool {
+		return p.i >= 0 && p.i <= len(grid)-1 && p.j >= 0 && p.j <= len(grid[p.i])-1
+	}
+
+	go func() {
+		defer close(ch)
+
+		directions := []Pos{
+			{i: c.i - 1, j: c.j},
+			{i: c.i + 1, j: c.j},
+			{i: c.i, j: c.j + 1},
+			{i: c.i, j: c.j - 1},
+		}
+
+		from := grid[c.i][c.j]
+		for _, d := range directions {
+			if inBounds(d) {
+				to := grid[d.i][d.j]
+				if canReach(from, to) {
+					ch <- d
+				}
+			}
+		}
+	}()
+
+	return ch
+}
+
+func copyGrid(grid [][]byte) [][]byte {
+	c := make([][]byte, len(grid))
+	for i, row := range grid {
+		c[i] = make([]byte, len(row))
+		for j, col := range grid[i] {
+			c[i][j] = col
+		}
+	}
+	return c
 }
 
 func parse(filename string) ([][]byte, error) {
