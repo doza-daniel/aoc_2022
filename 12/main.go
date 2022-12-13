@@ -37,14 +37,7 @@ func solvePartOne(grid [][]byte) int {
 	}
 
 	ds := dijkstra(grid, start, newNeighborsFn(uphill))
-	for i, row := range ds {
-		for j, d := range row {
-			p := Pos{i, j}
-			if p == end {
-				return d
-			}
-		}
-	}
+	return ds[end]
 
 	panic("asdf")
 }
@@ -64,88 +57,75 @@ func solvePartTwo(grid [][]byte) int {
 		}
 	}
 
-	min := math.MaxInt32
+	min := infinity
 	ds := dijkstra(grid, end, newNeighborsFn(downhill))
-	for i, row := range ds {
-		for j, d := range row {
-			if grid[i][j] == 'a' && d < min {
-				min = d
-			}
+
+	for p, d := range ds {
+		if grid[p.i][p.j] == 'a' && d < min {
+			min = d
 		}
 	}
 
 	return min
 }
 
-func dijkstra(grid [][]byte, init Pos, neighborsFn func([][]byte, Pos) <-chan Pos) [][]int {
-	visited := make(map[Pos]bool)
-	unvisited := make(map[Pos]struct{})
-	distances := make([][]int, len(grid))
+const infinity int = math.MaxInt32
 
-	for i := 0; i < len(grid); i++ {
-		distances[i] = make([]int, len(grid[i]))
-		for j := 0; j < len(grid[i]); j++ {
-			distances[i][j] = math.MaxInt32
-			unvisited[Pos{i, j}] = struct{}{}
+func dijkstra(grid [][]byte, init Pos, neighborsFn func([][]byte, Pos) <-chan Pos) map[Pos]int {
+	// visited := make(map[Pos]bool)
+	distances := make(map[Pos]int)
+
+	unvisited := &MinHeap{
+		search: make(map[Pos]int),
+		less: func(a, b Pos) bool {
+			return distances[a] < distances[b]
+		},
+	}
+
+	for i := range grid {
+		for j := range grid[i] {
+			p := Pos{i, j}
+
+			if p == init {
+				distances[p] = 0
+				unvisited.push(p)
+			} else {
+				distances[p] = infinity
+			}
 		}
 	}
-	distances[init.i][init.j] = 0
 
-	currentNode := init
-	for {
-		newD := distances[currentNode.i][currentNode.j] + 1
+	for len(unvisited.storage) > 0 {
+		c := unvisited.pop()
 
-		neighbors := neighborsFn(grid, currentNode)
-		for n := range neighbors {
-			if visited[n] {
-				continue
+		for n := range neighborsFn(grid, c) {
+			alt := distances[c] + 1
+			if alt < distances[n] {
+				distances[n] = alt
 			}
 
-			oldD := distances[n.i][n.j]
-			if newD < oldD {
-				distances[n.i][n.j] = newD
+			_, found := unvisited.search[n]
+			if !found {
+				unvisited.push(n)
+			} else {
+				unvisited.recompute(n)
 			}
-		}
 
-		delete(unvisited, currentNode)
-		visited[currentNode] = true
-
-		min := math.MaxInt32
-		for p := range unvisited {
-			d := distances[p.i][p.j]
-			if d < min {
-				min = d
-				currentNode = p
-			}
-		}
-
-		if min == math.MaxInt32 {
-			return distances
 		}
 	}
+
+	return distances
 }
 
 type MinHeap struct {
 	storage []Pos
+	search  map[Pos]int
 	less    func(i, j Pos) bool
 }
 
-func (m *MinHeap) pop() Pos {
-	min := m.storage[0]
-
-	size := len(m.storage)
-	m.storage[0] = m.storage[size-1]
-	m.storage = m.storage[:size-1]
-
-	m.heapify(0)
-
-	return min
-}
-
-func (m *MinHeap) push(n Pos) {
-	m.storage = append(m.storage, n)
-
-	i := len(m.storage) - 1
+func (m *MinHeap) recompute(n Pos) {
+	i := m.search[n]
+	m.search[n] = i
 	for {
 		parent := (i - 1) / 2
 
@@ -156,6 +136,39 @@ func (m *MinHeap) push(n Pos) {
 		m.storage[i], m.storage[parent] = m.storage[parent], m.storage[i]
 
 		i = parent
+		m.search[n] = i
+	}
+}
+
+func (m *MinHeap) pop() Pos {
+	min := m.storage[0]
+
+	size := len(m.storage)
+	m.storage[0] = m.storage[size-1]
+	m.storage = m.storage[:size-1]
+
+	m.heapify(0)
+	delete(m.search, min)
+
+	return min
+}
+
+func (m *MinHeap) push(n Pos) {
+	m.storage = append(m.storage, n)
+
+	i := len(m.storage) - 1
+	m.search[n] = i
+	for {
+		parent := (i - 1) / 2
+
+		if i == 0 || !m.less(m.storage[i], m.storage[parent]) {
+			break
+		}
+
+		m.storage[i], m.storage[parent] = m.storage[parent], m.storage[i]
+
+		i = parent
+		m.search[n] = i
 	}
 }
 
@@ -178,6 +191,7 @@ func (m *MinHeap) heapify(i int) {
 		}
 
 		m.storage[i], m.storage[smallest] = m.storage[smallest], m.storage[i]
+		m.search[m.storage[i]], m.search[m.storage[smallest]] = m.search[m.storage[smallest]], m.search[m.storage[i]]
 
 		i = smallest
 	}
