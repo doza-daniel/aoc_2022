@@ -164,12 +164,12 @@ func (m *MinHeap) heapify(i int) {
 		var smallest int = i
 
 		left := 2*i + 1
-		if left < len(m.storage) && m.less(m.storage[left], m.storage[i]) {
+		if left < len(m.storage) && m.less(m.storage[left], m.storage[smallest]) {
 			smallest = left
 		}
 
 		right := 2*i + 2
-		if right < len(m.storage) && m.less(m.storage[right], m.storage[i]) {
+		if right < len(m.storage) && m.less(m.storage[right], m.storage[smallest]) {
 			smallest = right
 		}
 
