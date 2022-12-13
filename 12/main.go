@@ -125,6 +125,64 @@ func dijkstra(grid [][]byte, init Pos, neighborsFn func([][]byte, Pos) <-chan Po
 	}
 }
 
+type MinHeap struct {
+	storage []Pos
+	less    func(i, j Pos) bool
+}
+
+func (m *MinHeap) pop() Pos {
+	min := m.storage[0]
+
+	size := len(m.storage)
+	m.storage[0] = m.storage[size-1]
+	m.storage = m.storage[:size-1]
+
+	m.heapify(0)
+
+	return min
+}
+
+func (m *MinHeap) push(n Pos) {
+	m.storage = append(m.storage, n)
+
+	i := len(m.storage) - 1
+	for {
+		parent := (i - 1) / 2
+
+		if i == 0 || !m.less(m.storage[i], m.storage[parent]) {
+			break
+		}
+
+		m.storage[i], m.storage[parent] = m.storage[parent], m.storage[i]
+
+		i = parent
+	}
+}
+
+func (m *MinHeap) heapify(i int) {
+	for {
+		var smallest int = i
+
+		left := 2*i + 1
+		if left < len(m.storage) && m.less(m.storage[left], m.storage[i]) {
+			smallest = left
+		}
+
+		right := 2*i + 2
+		if right < len(m.storage) && m.less(m.storage[right], m.storage[i]) {
+			smallest = right
+		}
+
+		if smallest == i || m.less(m.storage[i], m.storage[smallest]) {
+			break
+		}
+
+		m.storage[i], m.storage[smallest] = m.storage[smallest], m.storage[i]
+
+		i = smallest
+	}
+}
+
 func newNeighborsFn(direction func(byte, byte) bool) func([][]byte, Pos) <-chan Pos {
 	return func(grid [][]byte, curr Pos) <-chan Pos {
 		return neighbors(grid, curr, direction)
